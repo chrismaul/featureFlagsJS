@@ -10,8 +10,8 @@ module.exports = function(config) {
   moduleMap.level = "./lib/feature-level.js";
   moduleMap.split = "./lib/feature-split.js";
 
-  function setFeatureData(value) {
-    _.each(featureData, function(featureValue,featureKey) {
+  function setFeatureData(features) {
+    _.each(features, function(featureValue,featureKey) {
       var featureGenerator,
         featureModule;
       
@@ -44,22 +44,19 @@ module.exports = function(config) {
   }
   featureConfig.setFeatureGenerator(api);
   
-  
+  api.cookiesOptions = {};
   
   /**
-   * This function need to be called for each request and response
-   * This sets the features on the response
+   * This middleware needs to be added
    */
-  api.setFeatures = function(request, response, signedCookie) {
+  api.middleware = function(request, response, next) {
     // only uses unsigned cookies when this flag is set to false
     
     var features = {},
       featuresApi = {};
     
-    if(signedCookie === false) {
-      if(request.signedCookies.features) {
-        features = request.signedCookies.features;
-      }
+    if(request.signedCookies && request.signedCookies.features) {
+      features = request.signedCookies.features;
     } else if(request.cookies.features) {
       features = request.cookies.features;
     }
@@ -70,11 +67,8 @@ module.exports = function(config) {
       }
     });
     
-    if(signedCookie) {
-      response.signedCookie("features", features, { signed: true });
-    } else {
-      response.cookie("features", features);
-    }
+    response.cookie("features", features, api.cookiesOptions);
+    
     featuresApi.data = features;
     featuresApi.featureLevel = function(featureName) {
       return features[featureName];
@@ -91,7 +85,11 @@ module.exports = function(config) {
       }
       return retVal;
     };
-    
+    request.features = featuresApi;
+
+    if(next) {
+      next();
+    }
   };
   
   return api;

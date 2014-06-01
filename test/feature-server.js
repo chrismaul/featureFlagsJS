@@ -1,6 +1,8 @@
 var express = require("express"),
   doppio = require("doppio"),
   request = require("request"),
+  bodyParser = require("body-parser"),
+  cookieParser = require("cookie-parser"),
   featureFlagJS = require("../index");
   
 module.exports = function(config) {
@@ -9,24 +11,21 @@ module.exports = function(config) {
     server;
     
   featureFlag = featureFlagJS(config);
-  app.configure( function() {
-      app.use(express.bodyParser());
-      app.use(express.methodOverride());
-      app.use(app.router);
-      app.use(express.cookieParser());
-  });
-  app.use(function(req,res,next){
-    featureFlag.setFeatures(req,res);
-    next();
-  })
+  app.use(bodyParser());
+  app.use(cookieParser());
+  app.use( featureFlag.middleware );
+  
   app.use("/",function(req,res) {
     res.send(req.features.data);
   });
   
-  server = doppio(app);
+  server = doppio(app, { autostart: false });
   server.getFeatures = function(done) {
     request.get(server.url(),function(error,request,body){
-      done(error,JSON.parse(body));
+      if(!error) {
+        body = JSON.parse(body);
+      }
+      done(error,body);
     });
   };
   return server;
