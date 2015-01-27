@@ -11,19 +11,34 @@ module.exports = function(config) {
     server;
     
   featureFlag = featureFlagJS(config);
+  app.user = "testUser";
   app.use(bodyParser());
   app.use(cookieParser());
-  app.use( featureFlag.middleware );
+  app.use(function(request,response,next) {
+    request.user = app.user;
+    next();
+  });
+  
+  app.use(featureFlag);
   
   app.use("/",function(req,res) {
-    res.send(req.features.data);
+    res.send(req.features);
   });
   
   server = doppio(app, { autostart: false });
   server.getFeatures = function(done) {
+    var uri = server.url();
+    if(arguments.length === 2) {
+      uri += done;
+      done = arguments[1];
+    }
     request.get(server.url(),function(error,request,body){
       if(!error) {
-        body = JSON.parse(body);
+        try {
+          body = JSON.parse(body);
+        } catch(error) {
+          console.log(body);
+        }
       }
       done(error,body);
     });

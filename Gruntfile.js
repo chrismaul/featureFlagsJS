@@ -11,14 +11,13 @@ module.exports = function(grunt) {
         NODE_ENV:'test'
       }
     },
-    
     // Configure a mochaTest task
     mochaTest: {
       test: {
         options: {
           reporter: 'spec'
         },
-        src: ['test/**/*.js']
+        src: ['test/**/*_spec.js']
       }
     }
   });

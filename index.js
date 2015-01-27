@@ -1,96 +1,122 @@
-var simpleFeatureConfig = require("./lib/simple-feature-config"),
-  _ = require("underscore");
+var _ = require("underscore");
 
 module.exports = function(config) {
-  var featureConfig,
-    featureData = {},
-    api = {},
-    moduleMap = {};
-
-  moduleMap.level = "./lib/feature-level.js";
-  moduleMap.split = "./lib/feature-split.js";
-
-  function setFeatureData(features) {
-    _.each(features, function(featureValue,featureKey) {
-      var featureGenerator,
-        featureModule;
-      
-      featureModule = featureValue.type;
-      if(moduleMap[featureModule]) {
-        featureModule = moduleMap[featureModule];
+  
+  function matchUser(match,request) {
+    if(!_.isArray(match.users)) {
+      match.users = [match.users];
+    }
+    if(_.contains(match.users,request.user)) {
+      return true;
+    } else {
+      return false;
+    }
+  }
+  
+  function selectFeature(feature,request) {
+    var matchLevel = [];
+    var currentLevel = 0;
+    var retVal = false;
+    feature.forEach(function(featureLevel){
+      if(featureLevel.level === 0) {
+        return;
       }
-      
-      featureGenerator = require(featureModule);
-      featureData[featureKey] = featureGenerator(featureValue.config);
+      var level = featureLevel.level;
+      if(featureLevel.match) {
+        var match = false;
+        if(featureLevel.match.type === "user" ) {
+          match = matchUser(featureLevel.match,request);
+        } else {
+          try {
+            match = require(featureLevel.match.type)(featureLevel.match,
+            request);
+          } catch(error) {
+            
+          }
+        }
+        if(!match) {
+          level = -1;
+        }
+        if(match && level > 100) {
+          retVal = featureLevel.value;
+        }
+      }
+      if(level > 100 && !retVal) {
+        retVal = featureLevel.value;
+      } else if(level > -1) {
+        matchLevel.push({
+          min:currentLevel,
+          max:currentLevel+level,
+          value:featureLevel.value
+        });
+        currentLevel+=level;
+      }
     });
-  
+    if(!retVal) {
+      
+      var luckyNumber = _.random(0,currentLevel);
+      matchLevel.forEach(function(match){
+        if(match.min < luckyNumber && luckyNumber <= match.max) {
+          retVal = match.value;
+        }
+      });
+    }
+    return retVal;
   }
   
-  Object.defineProperty(api,"featureData", { 
-    set : setFeatureData,
-    get : function() { return featureData; }
-  });
-  
-  if ( ! config ) {
-    return { 
-      isEnabled: function() { return true; },
-      featureLevel: function() { return "default"; }
-    };
-  }
-  if ( config.setFeatureGenerator instanceof Function ) {
-    featureConfig = config;
-  } else {
-    featureConfig = simpleFeatureConfig(config);
-  }
-  featureConfig.setFeatureGenerator(api);
-  
-  api.cookiesOptions = {};
-  
-  /**
-   * This middleware needs to be added
-   */
-  api.middleware = function(request, response, next) {
-    // only uses unsigned cookies when this flag is set to false
-    
-    var features = {},
-      featuresApi = {};
-    
-    if(request.signedCookies && request.signedCookies.features) {
-      features = request.signedCookies.features;
-    } else if(request.cookies.features) {
+  function middleware(request,response,next) {
+    var features = {};
+    if(request.cookies.features) {
       features = request.cookies.features;
     }
-    
-    _.each( featureData, function(featureValue,featureKey) {
-      if ( ! features[featureKey] ) {
-        features[featureKey] = featureValue(request);
+    Object.keys(features).forEach(function(name) {
+      if(!api.featuresConfig[name]) {
+        delete features[name];
       }
     });
     
-    response.cookie("features", features, api.cookiesOptions);
-    
-    featuresApi.data = features;
-    featuresApi.featureLevel = function(featureName) {
-      return features[featureName];
-    };
-    
-    featuresApi.isEnabled = function (featureName, checkLevel) {
-      var featureLevel = featuresApi.featureLevel(featureName),
-        retVal = false;
-      if( typeof(featureLevel) === "number" && 
-        typeof(checkLevel) === "number ") {
-        retVal = checkLevel <= featureLevel;
-      } else {
-        retVal = checkLevel == featureLevel;
+    Object.keys(api.featuresConfig).forEach(function(name) {
+      if(!features[name]) {
+        features[name] = selectFeature(api.featuresConfig[name],request);
+      }
+      if(request.query["feature-"+name]) {
+        features[name]=request.query["feature-"+name];
+      }
+    });
+    request.features = features;
+    function isEnabled(name,value) {
+      var retVal = false;
+      if(value === undefined) {
+        if(features[name]) {
+          retVal = true;
+        }
+      } else if(features[name] === value) { 
+        retVal = true;
       }
       return retVal;
-    };
-    request.features = featuresApi;
-
-    if(next) {
-      next();
     }
-  };
+    function atLeast(name,value) {
+      var retVal = false;
+      if( typeof(value) === "number" && 
+          typeof(features[name]) === "number") {
+          retVal = features[name] <= value;
+      } else {
+        retVal = features.isEnabled(name,value);
+      }
+      return retVal;
+    }
+    Object.defineProperty(features,"isEnabled",{
+      value:isEnabled
+    });
+    Object.defineProperty(features,"atLeast",{
+      value:atLeast
+    });
+    next();
+  }
+  
+  var api = middleware;
+  
+  api.featuresConfig = config;
   
   return api;
-}
+};
