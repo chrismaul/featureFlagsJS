@@ -105,12 +105,14 @@ module.exports = function(config) {
       }
       return retVal;
     }
+    response.cookie("features", features);
     Object.defineProperty(features,"isEnabled",{
       value:isEnabled
     });
     Object.defineProperty(features,"atLeast",{
       value:atLeast
     });
+    
     next();
   }
   
