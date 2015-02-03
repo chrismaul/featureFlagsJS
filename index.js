@@ -68,6 +68,11 @@ module.exports = function(config) {
     var features = {};
     if(request.cookies.features) {
       features = request.cookies.features;
+      if(_.isString(features)) {
+        try {
+          features = JSON.parse(features);
+        } catch (error) {}
+      }
     }
     Object.keys(features).forEach(function(name) {
       if(!api.featuresConfig[name]) {
@@ -105,7 +110,7 @@ module.exports = function(config) {
       }
       return retVal;
     }
-    response.cookie("features", features);
+    response.cookie("features", JSON.stringify(features));
     Object.defineProperty(features,"isEnabled",{
       value:isEnabled
     });
