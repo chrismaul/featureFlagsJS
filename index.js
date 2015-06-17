@@ -1,7 +1,9 @@
 var _ = require("underscore");
 
-module.exports = function(config) {
-  
+module.exports = function(config,options) {
+  if(!options) {
+    options = {};
+  }
   function matchUser(match,request) {
     if(!_.isArray(match.users)) {
       match.users = [match.users];
@@ -12,7 +14,7 @@ module.exports = function(config) {
       return false;
     }
   }
-  
+
   function selectFeature(feature,request) {
     var matchLevel = [];
     var currentLevel = 0;
@@ -31,7 +33,7 @@ module.exports = function(config) {
             match = require(featureLevel.match.type)(featureLevel.match,
             request);
           } catch(error) {
-            
+
           }
         }
         if(!match) {
@@ -53,7 +55,7 @@ module.exports = function(config) {
       }
     });
     if(!retVal) {
-      
+
       var luckyNumber = _.random(0,currentLevel);
       matchLevel.forEach(function(match){
         if(match.min < luckyNumber && luckyNumber <= match.max) {
@@ -63,7 +65,7 @@ module.exports = function(config) {
     }
     return retVal;
   }
-  
+
   function middleware(request,response,next) {
     var features = {};
     if(request.cookies.features) {
@@ -79,7 +81,7 @@ module.exports = function(config) {
         delete features[name];
       }
     });
-    
+
     Object.keys(api.featuresConfig).forEach(function(name) {
       if(!features[name]) {
         features[name] = selectFeature(api.featuresConfig[name],request);
@@ -95,14 +97,14 @@ module.exports = function(config) {
         if(features[name]) {
           retVal = true;
         }
-      } else if(features[name] === value) { 
+      } else if(features[name] === value) {
         retVal = true;
       }
       return retVal;
     }
     function atLeast(name,value) {
       var retVal = false;
-      if( typeof(value) === "number" && 
+      if( typeof(value) === "number" &&
           typeof(features[name]) === "number") {
           retVal = features[name] <= value;
       } else {
@@ -110,20 +112,21 @@ module.exports = function(config) {
       }
       return retVal;
     }
-    response.cookie("features", JSON.stringify(features));
+    response.cookie("features", JSON.stringify(features),
+      { maxAge:(options.maxAge || 86400) } ); // a day in seconds
     Object.defineProperty(features,"isEnabled",{
       value:isEnabled
     });
     Object.defineProperty(features,"atLeast",{
       value:atLeast
     });
-    
+
     next();
   }
-  
+
   var api = middleware;
-  
+
   api.featuresConfig = config;
-  
+
   return api;
 };
