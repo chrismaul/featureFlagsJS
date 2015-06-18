@@ -112,8 +112,17 @@ module.exports = function(config,options) {
       }
       return retVal;
     }
-    response.cookie("features", JSON.stringify(features),
-      { maxAge:(options.maxAge || 86400) } ); // a day in seconds
+
+    var featuresAsString = JSON.stringify(features);
+    var cookieFeaturesAsString = request.cookies.features;
+    if(!_.isString(cookieFeaturesAsString)) {
+      cookieFeaturesAsString = JSON.stringify(cookieFeaturesAsString);
+    }
+
+    if(featuresAsString !== cookieFeaturesAsString ) {
+      response.cookie("features", JSON.stringify(features),
+        { maxAge:((options.maxAge || 86400) * 1000) } ); // a day in seconds
+    }
     Object.defineProperty(features,"isEnabled",{
       value:isEnabled
     });
