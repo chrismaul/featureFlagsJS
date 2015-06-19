@@ -67,7 +67,8 @@ module.exports = function(config,options) {
   }
 
   function middleware(request,response,next) {
-    var features = {};
+    var features = {},
+      setCookie = false;
     if(request.cookies.features) {
       features = request.cookies.features;
       if(_.isString(features)) {
@@ -86,8 +87,9 @@ module.exports = function(config,options) {
       if(!features[name]) {
         features[name] = selectFeature(api.featuresConfig[name],request);
       }
-      if(request.query["feature-"+name]) {
+      if(_.has(request.query,"feature-"+name)) {
         features[name]=request.query["feature-"+name];
+        setCookie = true;
       }
     });
     request.features = features;
@@ -119,7 +121,7 @@ module.exports = function(config,options) {
       cookieFeaturesAsString = JSON.stringify(cookieFeaturesAsString);
     }
 
-    if(featuresAsString !== cookieFeaturesAsString ) {
+    if( featuresAsString !== cookieFeaturesAsString  || setCookie ) {
       response.cookie("features", JSON.stringify(features),
         { maxAge:((options.maxAge || 86400) * 1000) } ); // a day in seconds
     }
